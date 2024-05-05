@@ -1,31 +1,17 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import os
 import cv2
 import numpy as np
-import pickle
-from tensorflow.keras.models import load_model as load_keras_model
+import streamlit as st
+from tensorflow.keras.models import load_model 
 from tensorflow.keras.applications.resnet50 import preprocess_input, decode_predictions
 from tensorflow.keras.applications import ResNet50
-# Saving the trained model to a pickle file
 import joblib
 
 # Loading the saved model using joblib
 def load_saved_model(filename):
-    return joblib.load(filename) 
+    return joblib.load(filename)
 
 base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
-
-app = Flask(__name__)
-CORS(app)
-
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 def extract_features(img_array):
     img_array = cv2.resize(img_array, (224, 224))
@@ -36,13 +22,10 @@ def extract_features(img_array):
     return features_flattened
 
 def predict_from_model(model_filename, img_path):
-    # Assuming you have defined the necessary preprocessing functions and variables
     img_array = cv2.imread(img_path)
     features = extract_features(img_array)
     model = load_saved_model(model_filename)
     result = model.predict([features]) # Assuming features is a list
-    # return prediction[0]
-    
     if result == 1:
         return "Recyclable"
     elif result == 0:
@@ -53,22 +36,32 @@ def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+def main():
+    st.title('Image Classifier')
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    uploaded_file = st.file_uploader("Choose an image...", type=["png", "jpg", "jpeg"])
 
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if uploaded_file is not None:
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, 1)
+        st.image(image, caption='Uploaded Image.', use_column_width=True)
+        
         model_filename = 'decision_tree_model (2).pkl'
-        predicted_class_index = predict_from_model(model_filename, image_path)
-        print(predicted_class_index)
-    return predicted_class_index
 
-if __name__ == '__main__':    app.run(debug=True)
+        # Save the uploaded file to a temporary location
+        temp_dir = 'uploads'
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        temp_filepath = os.path.join(temp_dir, uploaded_file.name)
+        with open(temp_filepath, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        predicted_class_index = predict_from_model(model_filename, temp_filepath)
+        
+        st.write("Predicted Class Index:", predicted_class_index)
+
+        # Remove the temporary uploaded file
+        os.remove(temp_filepath)
+
+if __name__ == '__main__':
+    main()
