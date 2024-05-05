@@ -58,7 +58,7 @@ def main():
 
         predicted_class_index = predict_from_model(model_filename, temp_filepath)
         
-        st.write("Predicted Class Index:", predicted_class_index)
+        st.write("Prediction:", predicted_class_index)
 
         # Remove the temporary uploaded file
         os.remove(temp_filepath)
